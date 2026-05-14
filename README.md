@@ -1,73 +1,97 @@
-# myn8n — n8n Self-Hosted Monorepo
+# n8n Self-Hosted Monorepo
 
-Workflow automation stack corriendo en tu servidor propio, gestionado con PM2 detrás de HestiaCP.
+Workflow automation platform — n8n v2.20.0 source code, ready for self-hosted deployment.
 
-## Stack
+## Requisitos
 
-- **n8n** v2.20.0 (monorepo completo, ~18K archivos fuente)
-- **PM2** — gestor de procesos (reinicio automático, logs)
-- **HestiaCP** — proxy inverso nginx/apache en el frontend
-- **Node.js** >= 22.16 | **pnpm** >= 10.22.0
+- **Node.js** >= 22.16
+- **pnpm** >= 10.22.0
+- **PM2** — process manager
+- Proxy inverso (nginx, Apache, HestiaCP, etc.) para HTTPS
 
-## Endpoints
+## Deploy en un VPS nuevo
 
-| Servicio | URL | Notas |
-|---|---|---|
-| Editor n8n | `http://217.216.43.75:2004/` | Puerto 2004, PM2 |
-| Webhooks | `http://217.216.43.75:2004/` | WEBHOOK_URL configurado |
-| Proxy público | `https://n8n.percyalvarez.lat/` | HestiaCP (HTTPS) |
+```bash
+# 1. Clonar el repo
+git clone https://github.com/tu-user/myn8n.git
+cd myn8n
+
+# 2. Instalar pnpm y dependencias
+npm install -g pnpm
+pnpm install
+
+# 3. Build del monorepo
+pnpm build
+
+# 4. Configurar .env o ecosystem.config.js con los valores de tu VPS
+#    (ver sección Configuración más abajo)
+
+# 5. Iniciar con PM2
+pm2 start ecosystem.config.js
+```
+
+## Configuración
+
+### ecosystem.config.js
+
+```js
+module.exports = {
+  apps: [{
+    name: 'n8n',
+    script: '/usr/bin/n8n',
+    args: 'start',
+    env: {
+      N8N_PORT: 2004,
+      N8N_PROTOCOL: 'http',
+      WEBHOOK_URL: 'http://tu-ip-o-dominio:2004/',
+      N8N_SECURE_COOKIE: false
+    },
+    instances: 1,
+    autorestart: true,
+    max_memory_restart: '1G',
+    error_file: 'logs/n8n-error.log',
+    out_file: 'logs/n8n-out.log'
+  }]
+};
+```
+
+### Variables clave
+
+| Variable | Descripción |
+|---|---|
+| `N8N_PORT` | Puerto interno donde corre n8n |
+| `N8N_PROTOCOL` | `http` (TLS lo maneja el proxy) |
+| `WEBHOOK_URL` | URL pública para webhooks — DEBE coincidir con el acceso externo |
+| `N8N_SECURE_COOKIE` | `false` si estás detrás de un proxy sin TLS a nivel n8n |
+
+> HTTPS se maneja en el proxy inverso, n8n corre sin TLS internamente.
 
 ## Gestión con PM2
 
 ```bash
-# Ver estado
-pm2 status
-
-# Reiniciar n8n
-pm2 restart n8n
-
-# Ver logs en tiempo real
-pm2 logs n8n --lines 50
-
-# Tail de logs
-tail -f logs/n8n-out.log
-tail -f logs/n8n-error.log
-```
-
-## Build y deploy
-
-```bash
-# Tras un pull, reconstruir todo
-pnpm install
-pnpm build
-
-# Reiniciar después de build
-pm2 restart n8n
+pm2 status              # Ver estado
+pm2 restart n8n         # Reiniciar
+pm2 logs n8n --lines 50 # Ver logs
+tail -f logs/n8n-out.log # Tail logs
 ```
 
 ## Desarrollo local
 
 ```bash
-# Backend completo (sin editor-ui)
-pnpm dev:be
-
-# Editor frontend
-pnpm dev:fe:editor
-
-# Construir n8n local (usa packages/cli/bin/n8n)
-pnpm start
+pnpm install            # Instalar todo
+pnpm build              # Build completo
+pnpm dev:be             # Backend (sin editor-ui)
+pnpm dev:fe:editor      # Editor frontend
+pnpm start              # Usar build local (packages/cli/bin/n8n)
 ```
 
-## Configuración
+## Testing
 
-Variables de entorno clave (definidas en `ecosystem.config.js`):
-
-- `N8N_PORT=2004`
-- `N8N_PROTOCOL=http`
-- `WEBHOOK_URL=http://217.216.43.75:2004/`
-- `N8N_SECURE_COOKIE=false`
-
-> HTTPS lo maneja HestiaCP, n8n corre sin TLS internamente.
+```bash
+pnpm test               # Todos los tests
+pnpm test:ci            # Modo CI (secuencial)
+pnpm test:affected      # Solo paquetes cambiados
+```
 
 ## Estructura del monorepo
 
@@ -84,6 +108,6 @@ packages/
 
 ## Notas
 
-- `start-n8n.sh` usa `npx n8n@latest` (npm live), no el build local.
-- Para correr desde el build local: `pnpm start` → `packages/cli/bin/n8n`
-- `logs/` está en `.gitignore` — no se sube a GitHub
+- `start-n8n.sh` puede usar `npx n8n@latest` (npm) o el build local
+- `pnpm start` usa el build local: `packages/cli/bin/n8n`
+- `logs/` está en `.gitignore` — no se sube
